@@ -9,10 +9,8 @@ import boostrap from 'bootstrap';
 import moment from 'moment';
 require('popper.js');
 import './index.css';
-import { ping } from './js/app';
 import { mqttInit } from './js/mqtt';
-import { initWebRTCAdaptor, switchAudioMode, switchVideoMode, startPublishing, stopPublishing, toggle_camera, toggle_audio, getStreamState } from './js/stream'
-import { initClass, fetchStudents, fetchInfo, fetchChat } from './js/axios';
+import { initClass,  fetchChat } from './js/axios';
 import axios from 'axios';
 
 const queryString = window.location.search;
@@ -20,21 +18,13 @@ const urlParams = new URLSearchParams(queryString);
 const classId = urlParams.get('classId')
 const apiToken = urlParams.get('token')
 var User;
-
+var Client; 
 initClass(apiToken).then((response) => {
     User = response.data
     localStorage.setItem('user', JSON.stringify(response.data));
-    fetchStudents(apiToken, classId).then(() => {
-        $(document).ready( function () {
-            document.getElementsByClassName('StudentItem').on('click', function (event) {
-                window.alert(event.id);
-            });
-        });
-    });
     $('#userName').text(response.data.name);
-    initWebRTCAdaptor(false, true);
     fetchChat(apiToken, classId, User);
-    mqttInit(apiToken,classId, User);
+    Client = mqttInit(apiToken,classId, User);
     handleForm();
 });
 
@@ -64,47 +54,35 @@ function handleForm (){
     })
 }
 
-setInterval(() => {
-    if(getStreamState(classId)) {
-        fetchInfo(apiToken, classId).then((response) => {
-            $('#viewers').text(response.data.webRTCViewerCount);
-            $('#speed').text(parseFloat(response.data.speed).toFixed(2) + ' X');
-            $('#start').text(moment(moment(response.data.startTime).format('YYYYMMDDkkmmss'), 'YYYYMMDDkkmmss').fromNow());
-        });
-    } else {
-        $('#viewers').text('N/A');
-        $('#speed').text('N/A');
-        $('#start').text('N/A');
-    }
-}, 30000);
-
 $(document).ready(function(){
-    $('#testJquery').on('click', function () {
-        $('#remoteVideo').slideToggle();
-    });
     $('#action_menu_btn').click(function(){
         $('.action_menu').toggle();
     });
     $('#action_menu_btn_2').click(function(){
         $('.action_menu_2').toggle();
     });
-    $('#videoSource').on('change', function() {
-        switchVideoMode(this.value)
+    $('#closeRoom').on('click', function () {
+        window.close()
     });
-    $('#audiSource').on('change', function() {
-        switchAudioMode(this.value)
-    });
-    $('#start_publish_button').on('click', function () {
-        startPublishing(classId);
+    $('#teacherStream').html(`
+        <iframe height="80%" width="100%" src="https://stream.futurelines.live:5443/WebRTCAppEE/play_embed.html?name=${classId}" frameborder="0" allowfullscreen></iframe>
+    `);
+
+    $('#raiseHand').on('click', function () {
+        var obj = {
+            order: 'RAISE_HAND',
+            uuid: User.uuid
+        }
+        console.log(obj)
+        Client.publish('/class/' + classId + "/orders", JSON.stringify(obj));
     })
-    $('#stop_publish_button').on('click', function () {
-        stopPublishing();
+    $('#lowerHand').on('click', function () {
+        var obj = {
+            order: 'LOWER_HAND',
+            uuid: User.uuid
+        }
+        console.log(obj)
+        Client.publish('/class/' + classId + "/orders", JSON.stringify(obj));
     })
-    $('#camera_toggle').on('click', function () {
-        toggle_camera();
-    })
-    $('#audio_toggle').on('click', function () {
-        toggle_audio();
-    });
 });
 
